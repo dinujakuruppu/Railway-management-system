@@ -10,6 +10,21 @@ export default function AdminSchedules() {
   const { trains, schedules, saveSchedule } = useApp();
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function save(schedule: TrainSchedule, message: string) {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await saveSchedule(schedule);
+      setMessage(message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save schedule.");
+    } finally {
+      setBusy(false);
+    }
+  }
   const filtered = trains.filter((t) =>
     `${t.name} ${t.trainNumber}`.toLowerCase().includes(query.toLowerCase()),
   );
@@ -18,7 +33,7 @@ export default function AdminSchedules() {
       <PageHeading
         eyebrow="Operating calendar"
         title="Train schedules"
-        description="Changes are saved immediately to this demo session."
+        description="Changes are saved to the shared project database."
         action={
           <ButtonLink href="/admin/trains" variant="secondary">
             Edit departure times
@@ -37,6 +52,11 @@ export default function AdminSchedules() {
           placeholder="Train name or number"
         />
       </div>
+      {error && (
+        <p role="alert" className="alert alert-error mb-4">
+          {error}
+        </p>
+      )}
       <p className="text-sm text-emerald-700 mb-4 min-h-5" role="status">
         {message}
       </p>
@@ -72,12 +92,15 @@ export default function AdminSchedules() {
                         className="control"
                         aria-label={`Operating days for ${t.name}`}
                         value={schedule.days}
+                        disabled={busy}
                         onChange={(e) => {
-                          saveSchedule({
-                            ...schedule,
-                            days: e.target.value as TrainSchedule["days"],
-                          });
-                          setMessage(`${t.name}: operating days updated.`);
+                          void save(
+                            {
+                              ...schedule,
+                              days: e.target.value as TrainSchedule["days"],
+                            },
+                            `${t.name}: operating days updated.`,
+                          );
                         }}
                       >
                         <option>Daily</option>
@@ -90,12 +113,10 @@ export default function AdminSchedules() {
                         <input
                           type="checkbox"
                           checked={schedule.active}
+                          disabled={busy}
                           onChange={(e) => {
-                            saveSchedule({
-                              ...schedule,
-                              active: e.target.checked,
-                            });
-                            setMessage(
+                            void save(
+                              { ...schedule, active: e.target.checked },
                               `${t.name}: schedule ${e.target.checked ? "enabled" : "paused"}.`,
                             );
                           }}

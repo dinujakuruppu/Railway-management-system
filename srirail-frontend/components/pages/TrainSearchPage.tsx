@@ -2,7 +2,7 @@
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { findJourneys, availablePlaces } from "@/lib/booking";
+import { findJourneys } from "@/lib/booking";
 import { formatDate, minutes, searchQuery } from "@/lib/format";
 import { validateSearch } from "@/lib/validation";
 import JourneySearchForm, {
@@ -26,7 +26,7 @@ export default function TrainSearchPage() {
     date: params.get("date") ?? defaults.date,
     count: Number(params.get("count") ?? 1),
   };
-  const { trains, schedules, bookings, ready } = useApp();
+  const { trains, schedules, ready } = useApp();
   const [filters, setFilters] = useState(defaultFilters);
   const errors = validateSearch(search);
   const valid = Object.keys(errors).length === 0;
@@ -36,11 +36,7 @@ export default function TrainSearchPage() {
       return (
         (filters.type === "all" || t.type === filters.type) &&
         (filters.classId === "all" ||
-          t.classes.some(
-            (c) =>
-              c.id === filters.classId &&
-              availablePlaces(t, search.date, c.id, bookings) >= search.count,
-          )) &&
+          t.classes.some((c) => c.id === filters.classId)) &&
         (filters.time === "all" ||
           (filters.time === "morning" && hour < 12) ||
           (filters.time === "afternoon" && hour >= 12 && hour < 18) ||

@@ -10,7 +10,7 @@ export default function ClassCard({
 }: {
   travelClass: TrainClass;
   selected: boolean;
-  available: number;
+  available: number | null;
   onSelect: () => void;
   disabled: boolean;
 }) {
@@ -40,7 +40,9 @@ export default function ClassCard({
               disabled ? "danger" : travelClass.reserved ? "success" : "neutral"
             }
           >
-            {available} {travelClass.reserved ? "seats" : "places"} available
+            {available === null
+              ? "Awaiting availability"
+              : `${available} ${travelClass.reserved ? "seats" : "places"} available`}
           </Badge>
           <span className="text-xs text-muted ml-3">Per passenger</span>
         </div>

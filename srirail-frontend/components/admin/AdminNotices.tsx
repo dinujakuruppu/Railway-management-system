@@ -13,6 +13,8 @@ export default function AdminNotices() {
   const [editing, setEditing] = useState<RailwayNotice | null>(null);
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   return (
     <>
       <PageHeading
@@ -30,6 +32,11 @@ export default function AdminNotices() {
           </Button>
         }
       />
+      {error && (
+        <p role="alert" className="alert alert-error mb-5">
+          {error}
+        </p>
+      )}
       {message && (
         <p className="alert alert-success mb-5" role="status">
           {message}
@@ -61,11 +68,25 @@ export default function AdminNotices() {
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => {
-                  saveNotice({ ...n, published: !n.published });
-                  setMessage(
-                    `Notice ${n.published ? "moved to draft" : "published"}.`,
-                  );
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  setMessage("");
+                  try {
+                    await saveNotice({ ...n, published: !n.published });
+                    setMessage(
+                      `Notice ${n.published ? "moved to draft" : "published"}.`,
+                    );
+                  } catch (err) {
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : "Unable to update notice.",
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
                 }}
               >
                 {n.published ? "Unpublish" : "Publish"}
@@ -83,8 +104,8 @@ export default function AdminNotices() {
           <NoticeEditor
             key={editing?.id ?? "new"}
             notice={editing}
-            onSave={(notice) => {
-              saveNotice(notice);
+            onSave={async (notice) => {
+              await saveNotice(notice);
               setOpen(false);
               setMessage(
                 notice.published

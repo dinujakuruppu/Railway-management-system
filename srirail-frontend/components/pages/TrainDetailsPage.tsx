@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { availablePlaces, findJourneys } from "@/lib/booking";
+import { findJourneys } from "@/lib/booking";
 import { dateOffset, formatDate, money, searchQuery } from "@/lib/format";
 import Button, { ButtonLink } from "@/components/ui/Button";
 import PageHeading from "@/components/ui/PageHeading";
@@ -12,7 +12,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import JourneyTimes from "@/components/booking/JourneyTimes";
 export default function TrainDetailsPage({ id }: { id: string }) {
-  const { trains, schedules, bookings, startJourney, ready } = useApp();
+  const { trains, schedules, connected, startJourney, ready } = useApp();
   const params = useSearchParams();
   const router = useRouter();
   if (!ready) return <LoadingSpinner />;
@@ -91,10 +91,7 @@ export default function TrainDetailsPage({ id }: { id: string }) {
                       </td>
                       <td>{money(c.price)}</td>
                       <td>
-                        <Badge tone="success">
-                          {availablePlaces(train, search.date, c.id, bookings)}{" "}
-                          {c.reserved ? "seats" : "places"}
-                        </Badge>
+                        <Badge tone="neutral">Checked at seat selection</Badge>
                       </td>
                     </tr>
                   ))}
@@ -132,6 +129,7 @@ export default function TrainDetailsPage({ id }: { id: string }) {
           </div>
           <Button
             className="w-full mt-6"
+            disabled={!connected}
             onClick={() => {
               startJourney({ ...search, train });
               router.push("/booking/passengers");

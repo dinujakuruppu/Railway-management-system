@@ -7,15 +7,17 @@ import EmptyState from "@/components/ui/EmptyState";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { ButtonLink } from "@/components/ui/Button";
 export default function TicketPage({ id }: { id: string }) {
-  const { bookings, ready } = useApp();
+  const { bookings, adminBookings, role, ready } = useApp();
   if (!ready) return <LoadingSpinner />;
-  const booking = bookings.find((b) => b.id === id);
+  const booking =
+    bookings.find((b) => b.id === id) ??
+    (role === "admin" ? adminBookings.find((b) => b.id === id) : undefined);
   if (!booking)
     return (
       <EmptyState
         icon="ticket"
         title="Ticket not found"
-        description="This ticket may belong to a different browser session. Find your available bookings below."
+        description="This ticket is unavailable for your account. Find your available bookings below."
       >
         <ButtonLink href="/dashboard/bookings">My bookings</ButtonLink>
       </EmptyState>

@@ -6,7 +6,7 @@ import PageHeading from "@/components/ui/PageHeading";
 import Input from "@/components/ui/Input";
 import EmptyState from "@/components/ui/EmptyState";
 export default function AdminPassengers() {
-  const { bookings, user } = useApp();
+  const { adminBookings: bookings, user } = useApp();
   const [query, setQuery] = useState("");
   const passengers = passengerRecords(bookings, user).filter((p) =>
     `${p.fullName} ${p.identity} ${p.email}`
@@ -18,7 +18,7 @@ export default function AdminPassengers() {
       <PageHeading
         eyebrow="Passenger records"
         title="Passengers"
-        description="Sample profiles and passengers from bookings in this session."
+        description="Passenger details from saved demonstration bookings."
       />
       <div className="card panel mb-6">
         <Input

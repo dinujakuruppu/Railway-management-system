@@ -1,6 +1,7 @@
 "use client";
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -19,185 +20,272 @@ import type {
   User,
 } from "@/types";
 import { allTrains, schedules } from "@/data/trains";
-import { sampleBookings } from "@/data/bookings";
 import { sampleNotices } from "@/data/notices";
-import { createBooking } from "@/lib/booking";
-import { departureHasPassed } from "@/lib/format";
-const KEY = "srirail-demo-v1";
+import { request } from "@/lib/client-api";
+
 export const emptyDraft: BookingDraft = {
   journey: null,
   passengers: [],
   classId: "second-reserved",
   seats: [],
 };
+type Role = "passenger" | "admin" | null;
+type Bootstrap = Pick<
+  AppState,
+  "user" | "bookings" | "trains" | "schedules" | "notices"
+> & { role: Role; adminBookings?: Booking[] };
 function initialState(): AppState {
   return {
     user: null,
-    bookings: sampleBookings(),
-    trains: allTrains,
-    schedules,
-    notices: sampleNotices(),
+    bookings: [],
+    trains: [],
+    schedules: [],
+    notices: [],
     draft: emptyDraft,
     lastBookingId: null,
   };
 }
 interface AppContextValue extends AppState {
   ready: boolean;
+  role: Role;
+  connected: boolean;
   storageWarning: string;
-  login: (user: User) => void;
-  logout: () => void;
-  updateProfile: (user: User) => void;
+  adminBookings: Booking[];
+  refresh: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (
+    values: Omit<User, "id"> & { password: string },
+  ) => Promise<string>;
+  logout: () => Promise<void>;
+  updateProfile: (user: User) => Promise<void>;
   startJourney: (journey: Journey) => void;
   updateDraft: (patch: Partial<BookingDraft>) => void;
-  pay: (method: PaymentMethod) => Booking;
-  cancelBooking: (id: string) => void;
-  saveTrain: (train: Train) => void;
-  saveSchedule: (schedule: TrainSchedule) => void;
-  saveNotice: (notice: RailwayNotice) => void;
-  resetDemo: () => void;
+  pay: (method: PaymentMethod) => Promise<Booking>;
+  cancelBooking: (id: string) => Promise<void>;
+  saveTrain: (train: Train) => Promise<void>;
+  saveSchedule: (schedule: TrainSchedule) => Promise<void>;
+  saveNotice: (notice: RailwayNotice) => Promise<void>;
 }
 const Context = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialState);
   const current = useRef(state);
   const [ready, setReady] = useState(false);
+  const [role, setRole] = useState<Role>(null);
+  const [connected, setConnected] = useState(false);
   const [storageWarning, setStorageWarning] = useState("");
-  function commit(next: AppState) {
+  const [adminBookings, setAdminBookings] = useState<Booking[]>([]);
+  const authEpoch = useRef(0);
+  const idempotencyKey = useRef<string | null>(null);
+  const paymentInFlight = useRef<Promise<Booking> | null>(null);
+  const update = useCallback((patch: Partial<AppState>) => {
+    const next = { ...current.current, ...patch };
     current.current = next;
     setState(next);
-  }
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(KEY);
-      if (raw) {
-        const stored: unknown = JSON.parse(raw);
-        if (
-          stored &&
-          typeof stored === "object" &&
-          "version" in stored &&
-          stored.version === 1 &&
-          "state" in stored
-        ) {
-          const s = stored.state as AppState;
-          if (
-            Array.isArray(s.trains) &&
-            Array.isArray(s.bookings) &&
-            Array.isArray(s.schedules) &&
-            Array.isArray(s.notices) &&
-            s.draft &&
-            "user" in s
-          ) {
-            current.current = s;
-            setState(s);
-          }
-        }
-      }
-    } catch {
-      setStorageWarning(
-        "Your previous demo session could not be loaded. A fresh session is ready.",
-      );
-    }
-    setReady(true);
   }, []);
+  const refresh = useCallback(async () => {
+    const epoch = authEpoch.current;
+    const data = await request<Bootstrap>("/api/bootstrap");
+    if (epoch !== authEpoch.current) return;
+    update({
+      user: data.user,
+      bookings: data.bookings,
+      trains: data.trains,
+      schedules: data.schedules,
+      notices: data.notices,
+    });
+    setRole(data.role);
+    setAdminBookings(data.adminBookings ?? []);
+    setConnected(true);
+    setStorageWarning("");
+  }, [update]);
   useEffect(() => {
-    if (!ready) return;
+    let active = true;
+    // Old prototype sessions contain unverified users and must never be trusted.
     try {
-      sessionStorage.setItem(KEY, JSON.stringify({ version: 1, state }));
+      sessionStorage.removeItem("srirail-demo-v1");
+    } catch {
+      /* Optional browser storage. */
+    }
+    void refresh()
+      .catch((error: unknown) => {
+        if (!active) return;
+        update({
+          trains: allTrains,
+          schedules,
+          notices: sampleNotices(),
+          user: null,
+          bookings: [],
+        });
+        setRole(null);
+        setConnected(false);
+        setStorageWarning(
+          `${error instanceof Error ? error.message : "The backend is unavailable."} Read-only sample preview: account and booking actions require the configured backend.`,
+        );
+      })
+      .finally(() => {
+        if (active) setReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [refresh, update]);
+  async function saveEntity(path: string, body: unknown) {
+    await request(path, { method: "PUT", body: JSON.stringify(body) });
+    // A saved write remains successful even if the following read is interrupted.
+    try {
+      await refresh();
     } catch {
       setStorageWarning(
-        "Browser storage is unavailable. Your changes will last until this page is refreshed.",
+        "Your change was saved. Refresh the page to load the latest data.",
       );
     }
-  }, [state, ready]);
-  function update(patch: Partial<AppState>) {
-    commit({ ...current.current, ...patch });
   }
-  function pay(method: PaymentMethod) {
+  async function pay(method: PaymentMethod): Promise<Booking> {
+    if (paymentInFlight.current) return paymentInFlight.current;
     const s = current.current;
-    // The ref is updated synchronously so a second click cannot create a duplicate booking.
-    if (!s.draft.journey && s.lastBookingId) {
+    if (!s.user) throw new Error("Sign in before creating a booking.");
+    if (!s.draft.journey) {
       const existing = s.bookings.find((b) => b.id === s.lastBookingId);
       if (existing) return existing;
+      throw new Error("Choose your journey first.");
     }
-    const booking = createBooking(
-      s.draft,
-      method,
-      s.bookings,
-      s.trains,
-      s.schedules,
-    );
-    commit({
-      ...s,
-      bookings: [booking, ...s.bookings],
-      lastBookingId: booking.id,
-      draft: emptyDraft,
-    });
-    return booking;
+    const journey = s.draft.journey;
+    const epoch = authEpoch.current;
+    idempotencyKey.current ??= crypto.randomUUID();
+    const pending = request<{ booking: Booking }>("/api/bookings", {
+      method: "POST",
+      body: JSON.stringify({
+        trainId: journey.train.id,
+        from: journey.from,
+        to: journey.to,
+        date: journey.date,
+        count: journey.count,
+        classId: s.draft.classId,
+        passengers: s.draft.passengers,
+        seats: s.draft.seats,
+        method,
+        idempotencyKey: idempotencyKey.current,
+        quotedPrice: journey.train.classes.find((c) => c.id === s.draft.classId)
+          ?.price,
+        quotedDepartureTime: journey.train.departureTime,
+        quotedArrivalTime: journey.train.arrivalTime,
+      }),
+    })
+      .then(({ booking }) => {
+        if (epoch !== authEpoch.current)
+          throw new Error(
+            "Your account session changed. Check your bookings before trying again.",
+          );
+        update({
+          bookings: [
+            booking,
+            ...current.current.bookings.filter((b) => b.id !== booking.id),
+          ],
+          lastBookingId: booking.id,
+          draft: emptyDraft,
+        });
+        if (role === "admin")
+          setAdminBookings((bookings) => [
+            booking,
+            ...bookings.filter((b) => b.id !== booking.id),
+          ]);
+        return booking;
+      })
+      .finally(() => {
+        paymentInFlight.current = null;
+      });
+    paymentInFlight.current = pending;
+    return pending;
   }
   return (
     <Context.Provider
       value={{
         ...state,
         ready,
+        role,
+        connected,
         storageWarning,
-        login: (user) => update({ user }),
-        logout: () => update({ user: null }),
-        updateProfile: (user) => update({ user }),
-        startJourney: (journey) =>
-          update({ draft: { ...emptyDraft, journey }, lastBookingId: null }),
+        adminBookings,
+        refresh,
+        login: async (email, password) => {
+          authEpoch.current += 1;
+          await request("/api/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ email, password }),
+          });
+          await refresh();
+        },
+        register: async (values) => {
+          authEpoch.current += 1;
+          const result = await request<{ message?: string }>(
+            "/api/auth/register",
+            { method: "POST", body: JSON.stringify(values) },
+          );
+          await refresh();
+          return (
+            result.message ??
+            "Account created. Check your email to confirm your account before signing in."
+          );
+        },
+        logout: async () => {
+          authEpoch.current += 1;
+          await request("/api/auth/logout", { method: "POST", body: "{}" });
+          update({
+            user: null,
+            bookings: [],
+            notices: current.current.notices.filter((n) => n.published),
+            trains: current.current.trains.filter((t) => t.active),
+            schedules: current.current.schedules.filter((s) => s.active),
+            draft: emptyDraft,
+            lastBookingId: null,
+          });
+          setRole(null);
+          setAdminBookings([]);
+          idempotencyKey.current = null;
+          await refresh();
+        },
+        updateProfile: async (user) => {
+          const epoch = authEpoch.current;
+          const result = await request<{ user: User }>("/api/profile", {
+            method: "PATCH",
+            body: JSON.stringify({
+              fullName: user.fullName.trim(),
+              identity: user.identity.trim().toUpperCase(),
+              mobile: user.mobile.trim(),
+            }),
+          });
+          if (epoch !== authEpoch.current)
+            throw new Error(
+              "Your account session changed. Please sign in again.",
+            );
+          update({ user: result.user });
+        },
+        startJourney: (journey) => {
+          idempotencyKey.current = crypto.randomUUID();
+          update({ draft: { ...emptyDraft, journey }, lastBookingId: null });
+        },
         updateDraft: (patch) =>
           update({ draft: { ...current.current.draft, ...patch } }),
         pay,
-        cancelBooking: (id) => {
-          const b = current.current.bookings.find((b) => b.id === id);
-          if (
-            !b ||
-            b.status !== "Confirmed" ||
-            departureHasPassed(b.journey.date, b.journey.train.departureTime)
-          )
-            return;
+        cancelBooking: async (id) => {
+          const { booking } = await request<{ booking: Booking }>(
+            `/api/bookings/${encodeURIComponent(id)}/cancel`,
+            { method: "POST", body: "{}" },
+          );
           update({
             bookings: current.current.bookings.map((b) =>
-              b.id === id ? { ...b, status: "Cancelled" } : b,
+              b.id === id ? booking : b,
             ),
           });
+          setAdminBookings((bookings) =>
+            bookings.map((b) => (b.id === id ? booking : b)),
+          );
         },
-        saveTrain: (train) => {
-          const exists = current.current.trains.some((t) => t.id === train.id);
-          update({
-            trains: exists
-              ? current.current.trains.map((t) =>
-                  t.id === train.id ? train : t,
-                )
-              : [...current.current.trains, train],
-            schedules: exists
-              ? current.current.schedules
-              : [
-                  ...current.current.schedules,
-                  {
-                    id: `schedule-${train.id}`,
-                    trainId: train.id,
-                    active: true,
-                    days: "Daily",
-                  },
-                ],
-          });
-        },
+        saveTrain: (train) => saveEntity("/api/admin/trains", train),
         saveSchedule: (schedule) =>
-          update({
-            schedules: current.current.schedules.map((s) =>
-              s.id === schedule.id ? schedule : s,
-            ),
-          }),
-        saveNotice: (notice) =>
-          update({
-            notices: current.current.notices.some((n) => n.id === notice.id)
-              ? current.current.notices.map((n) =>
-                  n.id === notice.id ? notice : n,
-                )
-              : [notice, ...current.current.notices],
-          }),
-        resetDemo: () => commit(initialState()),
+          saveEntity("/api/admin/schedules", schedule),
+        saveNotice: (notice) => saveEntity("/api/admin/notices", notice),
       }}
     >
       {children}

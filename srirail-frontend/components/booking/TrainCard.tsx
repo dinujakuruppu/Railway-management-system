@@ -2,7 +2,6 @@
 import { useRouter } from "next/navigation";
 import type { JourneySearch, Train } from "@/types";
 import { useApp } from "@/context/AppContext";
-import { availablePlaces } from "@/lib/booking";
 import { money, searchQuery } from "@/lib/format";
 import Button, { ButtonLink } from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
@@ -15,17 +14,8 @@ export default function TrainCard({
   train: Train;
   search: JourneySearch;
 }) {
-  const { startJourney, bookings } = useApp();
+  const { startJourney, connected } = useApp();
   const router = useRouter();
-  const count = availablePlaces(
-    train,
-    search.date,
-    "second-reserved",
-    bookings,
-  );
-  const available = train.classes.some(
-    (c) => availablePlaces(train, search.date, c.id, bookings) >= search.count,
-  );
   return (
     <article className="card train-card">
       <div className="train-card-top">
@@ -41,9 +31,7 @@ export default function TrainCard({
             </p>
           </div>
         </div>
-        <Badge tone={count >= search.count ? "success" : "warning"}>
-          {count} second-class reserved seats
-        </Badge>
+        <Badge tone="neutral">Live availability at seat selection</Badge>
       </div>
       <JourneyTimes train={train} />
       <div className="flex flex-wrap gap-2 mb-5">
@@ -71,13 +59,13 @@ export default function TrainCard({
             View details
           </ButtonLink>
           <Button
-            disabled={!available}
+            disabled={!connected}
             onClick={() => {
               startJourney({ ...search, train });
               router.push("/booking/passengers");
             }}
           >
-            {available ? "Select train" : "Sold out"}
+            Select train
             <Icon name="arrow" size={16} />
           </Button>
         </div>

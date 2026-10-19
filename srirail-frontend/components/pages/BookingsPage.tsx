@@ -13,11 +13,19 @@ import EmptyState from "@/components/ui/EmptyState";
 import Modal from "@/components/ui/Modal";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 export default function BookingsPage({ admin = false }: { admin?: boolean }) {
-  const { bookings, cancelBooking, ready } = useApp();
+  const {
+    bookings: ownBookings,
+    adminBookings,
+    cancelBooking,
+    ready,
+  } = useApp();
+  const bookings = admin ? adminBookings : ownBookings;
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All statuses");
   const [cancelling, setCancelling] = useState<Booking | null>(null);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const visible = bookings.filter(
     (b) =>
       (status === "All statuses" || b.status === status) &&
@@ -55,6 +63,11 @@ export default function BookingsPage({ admin = false }: { admin?: boolean }) {
           ))}
         </Select>
       </div>
+      {error && (
+        <p role="alert" className="alert alert-error mb-5">
+          {error}
+        </p>
+      )}
       {message && (
         <p role="status" className="alert alert-success mb-5">
           {message}
@@ -148,7 +161,9 @@ export default function BookingsPage({ admin = false }: { admin?: boolean }) {
       <Modal
         open={!!cancelling}
         title="Cancel this demo booking?"
-        onClose={() => setCancelling(null)}
+        onClose={() => {
+          if (!busy) setCancelling(null);
+        }}
       >
         <p className="text-muted mb-5">
           Booking <strong>{cancelling?.reference}</strong> will be marked
@@ -161,17 +176,31 @@ export default function BookingsPage({ admin = false }: { admin?: boolean }) {
           </Button>
           <Button
             variant="danger"
-            onClick={() => {
-              if (cancelling) {
-                cancelBooking(cancelling.id);
+            disabled={busy}
+            onClick={async () => {
+              if (!cancelling) return;
+              setBusy(true);
+              setError("");
+              setMessage("");
+              try {
+                await cancelBooking(cancelling.id);
                 setMessage(
                   `Booking ${cancelling.reference} has been cancelled in this demo.`,
                 );
+                setCancelling(null);
+              } catch (err) {
+                setError(
+                  err instanceof Error
+                    ? err.message
+                    : "Unable to cancel booking.",
+                );
+                setCancelling(null);
+              } finally {
+                setBusy(false);
               }
-              setCancelling(null);
             }}
           >
-            Confirm cancellation
+            {busy ? "Cancelling…" : "Confirm cancellation"}
           </Button>
         </div>
       </Modal>

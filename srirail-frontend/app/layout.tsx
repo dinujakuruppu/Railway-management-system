@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     template: "%s | SriRail",
   },
   description:
-    "SriRail Smart Ticketing — a frontend demonstration for planning railway journeys across Sri Lanka.",
+    "SriRail Smart Ticketing — an educational demonstration for planning railway journeys across Sri Lanka.",
   icons: { icon: "/favicon.svg" },
 };
 // Dates in the demo are relative to today's date in Sri Lanka.

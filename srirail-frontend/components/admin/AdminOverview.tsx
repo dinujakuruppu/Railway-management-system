@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 import Link from "next/link";
 import { useApp } from "@/context/AppContext";
 import { money, today } from "@/lib/format";
@@ -7,12 +6,16 @@ import { passengerRecords } from "@/lib/passengers";
 import { scheduledOn } from "@/lib/booking";
 import PageHeading from "@/components/ui/PageHeading";
 import StatCard from "@/components/dashboard/StatCard";
-import Button, { ButtonLink } from "@/components/ui/Button";
-import Modal from "@/components/ui/Modal";
+import { ButtonLink } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
 export default function AdminOverview() {
-  const { bookings, trains, schedules, notices, user, resetDemo } = useApp();
-  const [reset, setReset] = useState(false);
+  const {
+    adminBookings: bookings,
+    trains,
+    schedules,
+    notices,
+    user,
+  } = useApp();
   const revenue = bookings
     .filter((b) => b.status !== "Cancelled")
     .reduce((sum, b) => sum + b.total, 0);
@@ -21,12 +24,7 @@ export default function AdminOverview() {
       <PageHeading
         eyebrow="Operations overview"
         title="A clear view of the network"
-        description="Sample railway activity and bookings in this browser session."
-        action={
-          <Button variant="secondary" onClick={() => setReset(true)}>
-            Reset demo
-          </Button>
-        }
+        description="Shared demonstration railway activity and saved bookings."
       />
       <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-7">
         <StatCard
@@ -46,10 +44,10 @@ export default function AdminOverview() {
           icon="train"
         />
         <StatCard
-          label="Registered passengers · Demo"
+          label="Booking passengers · Demo"
           value={passengerRecords(bookings, user).length}
           icon="user"
-          note="Unique identities in this session"
+          note="Unique identities across bookings"
         />
         <StatCard
           label="Today’s scheduled journeys"
@@ -117,35 +115,12 @@ export default function AdminOverview() {
             </ButtonLink>
           </div>
           <p className="text-xs text-muted mt-5 mb-0">
-            Admin changes update the passenger screens in this tab. There is no
-            backend or access control in this frontend prototype.
+            Admin changes are saved to Supabase and appear when passenger
+            screens reload. Access is restricted to accounts with the admin
+            role.
           </p>
         </section>
       </div>
-      <Modal
-        open={reset}
-        title="Restore sample data?"
-        onClose={() => setReset(false)}
-      >
-        <p className="text-muted mb-6">
-          This clears bookings, profile edits and admin changes in the current
-          demo session and restores the original examples.
-        </p>
-        <div className="flex gap-3 justify-end">
-          <Button variant="secondary" onClick={() => setReset(false)}>
-            Keep my changes
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              resetDemo();
-              setReset(false);
-            }}
-          >
-            Reset demo data
-          </Button>
-        </div>
-      </Modal>
     </>
   );
 }

@@ -12,8 +12,17 @@ export default function BookingGuard({
   children: ReactNode;
   step?: 1 | 2 | 3;
 }) {
-  const { draft, ready, lastBookingId } = useApp();
+  const { draft, ready, lastBookingId, user } = useApp();
   if (!ready) return <LoadingSpinner />;
+  if (!user)
+    return (
+      <EmptyState
+        title="Sign in to book"
+        description="Your account keeps demonstration bookings and passenger details private."
+      >
+        <ButtonLink href="/login?next=/booking/passengers">Sign in</ButtonLink>
+      </EmptyState>
+    );
   if (!draft.journey)
     return (
       <EmptyState

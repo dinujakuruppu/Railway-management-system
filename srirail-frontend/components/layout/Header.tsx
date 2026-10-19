@@ -14,16 +14,18 @@ const links = [
 export default function Header() {
   const [open, setOpen] = useState(false);
   const [language, setLanguage] = useState("English");
-  const { user, logout, storageWarning } = useApp();
+  const { user, role, logout, storageWarning } = useApp();
   const path = usePathname();
   const router = useRouter();
+  const [error, setError] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
   return (
     <header className="site-header no-print">
       <div className="utility-bar">
         <div className="container flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
           <span>University project demo · Sample fares & schedules</span>
           <div className="flex items-center gap-4">
-            <Link href="/admin">Admin demo</Link>
+            {role === "admin" && <Link href="/admin">Administration</Link>}
             <label className="sr-only" htmlFor="language">
               Language preview
             </label>
@@ -71,9 +73,23 @@ export default function Header() {
               <Button
                 variant="ghost"
                 aria-label="Sign out"
-                onClick={() => {
-                  logout();
-                  router.push("/");
+                disabled={signingOut}
+                onClick={async () => {
+                  setSigningOut(true);
+                  setError("");
+                  try {
+                    await logout();
+                    router.replace("/");
+                    router.refresh();
+                  } catch (err) {
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : "Unable to sign out.",
+                    );
+                  } finally {
+                    setSigningOut(false);
+                  }
                 }}
               >
                 <Icon name="logout" />
@@ -126,6 +142,11 @@ export default function Header() {
           {language} selected for preview. Translation is not included in this
           demo.
         </p>
+      )}
+      {error && (
+        <div className="notice-strip" role="alert">
+          {error}
+        </div>
       )}
       {storageWarning && (
         <div className="notice-strip" role="status">

@@ -3,13 +3,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { demoUser } from "@/data/bookings";
 import { isEmail, isIdentity, isMobile, type Errors } from "@/lib/validation";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 export default function AuthForm({ register = false }: { register?: boolean }) {
-  const { login } = useApp();
+  const { login, register: createAccount, connected } = useApp();
   const router = useRouter();
   const [values, setValues] = useState({
     fullName: "",
@@ -23,6 +22,8 @@ export default function AuthForm({ register = false }: { register?: boolean }) {
   const [terms, setTerms] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
     try {
       const email = localStorage.getItem("srirail-remembered-email");
@@ -38,12 +39,12 @@ export default function AuthForm({ register = false }: { register?: boolean }) {
     setValues({ ...values, [key]: value });
     setErrors({ ...errors, [key]: "" });
   }
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     const issues: Errors = {};
     if (!isEmail(values.email)) issues.email = "Enter a valid email address.";
     if (values.password.length < 8)
-      issues.password = "Use at least 8 characters for this demo password.";
+      issues.password = "Use at least 8 characters for your password.";
     if (register) {
       if (values.fullName.trim().length < 3)
         issues.fullName = "Enter your full name.";
@@ -65,18 +66,41 @@ export default function AuthForm({ register = false }: { register?: boolean }) {
     } catch {
       /* Sign-in works without local storage. */
     }
-    login(
-      register
-        ? {
-            id: crypto.randomUUID(),
+    setError("");
+    setMessage("");
+    try {
+      if (register) {
+        setMessage(
+          await createAccount({
             fullName: values.fullName.trim(),
             identity: values.identity.trim().toUpperCase(),
             email: values.email.trim(),
             mobile: values.mobile.trim(),
-          }
-        : { ...demoUser, email: values.email.trim() },
-    );
-    router.push("/dashboard");
+            password: values.password,
+          }),
+        );
+        setValues((v) => ({ ...v, password: "", confirm: "" }));
+      } else {
+        await login(values.email.trim(), values.password);
+        const next = new URLSearchParams(window.location.search).get("next");
+        router.replace(
+          next &&
+            /^\/(?:dashboard|booking|admin)(?:\/|$)/.test(next) &&
+            !/[\\\r\n]/.test(next)
+            ? next
+            : "/dashboard",
+        );
+        router.refresh();
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to sign in. Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <div className="card auth-grid">
@@ -103,13 +127,23 @@ export default function AuthForm({ register = false }: { register?: boolean }) {
         <h1>{register ? "Let’s get you started" : "Welcome back"}</h1>
         <p className="text-muted text-sm mb-5">
           {register
-            ? "Create a sample profile to try the passenger experience."
-            : "Sign in to explore your demo travel dashboard."}
+            ? "Create your account to manage demonstration bookings."
+            : "Sign in to access your saved journeys and tickets."}
         </p>
         <p className="alert mb-6">
-          Frontend demo: use sample details. Any valid email and password of 8+
-          characters are accepted. Passwords are not saved or verified.
+          Use an email you can verify and fictional passenger details for this
+          university project. Tickets are not valid for railway travel.
         </p>
+        {error && (
+          <p className="alert alert-error mb-4" role="alert">
+            {error}
+          </p>
+        )}
+        {message && (
+          <p className="alert alert-success mb-4" role="status">
+            {message}
+          </p>
+        )}
         <form noValidate onSubmit={submit}>
           <div className="space-y-4">
             {register && (
@@ -206,27 +240,14 @@ export default function AuthForm({ register = false }: { register?: boolean }) {
               </Link>
             </div>
           )}
-          <Button type="submit" disabled={busy} className="w-full">
-            {busy
-              ? "Opening dashboard…"
-              : register
-                ? "Create demo account"
-                : "Sign in"}
+          <Button
+            type="submit"
+            disabled={busy || !connected}
+            className="w-full"
+          >
+            {busy ? "Please wait…" : register ? "Create account" : "Sign in"}
           </Button>
         </form>
-        <div className="relative text-center text-xs text-muted my-5">
-          or explore without filling the form
-        </div>
-        <Button
-          variant="secondary"
-          className="w-full"
-          onClick={() => {
-            login(demoUser);
-            router.push("/dashboard");
-          }}
-        >
-          Open demo account
-        </Button>
         <p className="text-sm text-center mt-6 mb-0">
           {register ? "Already have an account?" : "New to SriRail?"}{" "}
           <Link className="link" href={register ? "/login" : "/register"}>

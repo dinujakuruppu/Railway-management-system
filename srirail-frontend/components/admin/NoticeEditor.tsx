@@ -10,7 +10,7 @@ export default function NoticeEditor({
   onSave,
 }: {
   notice: RailwayNotice | null;
-  onSave: (notice: RailwayNotice) => void;
+  onSave: (notice: RailwayNotice) => Promise<void>;
 }) {
   const [form, setForm] = useState({
     title: notice?.title ?? "",
@@ -19,10 +19,11 @@ export default function NoticeEditor({
     published: notice?.published ?? true,
   });
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   return (
     <form
       noValidate
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
         if (
           form.title.trim().length < 5 ||
@@ -33,13 +34,23 @@ export default function NoticeEditor({
           );
           return;
         }
-        onSave({
-          id: notice?.id ?? `notice-${crypto.randomUUID().slice(0, 8)}`,
-          date: today(),
-          ...form,
-          title: form.title.trim(),
-          description: form.description.trim(),
-        });
+        setBusy(true);
+        setError("");
+        try {
+          await onSave({
+            id: notice?.id ?? `notice-${crypto.randomUUID().slice(0, 8)}`,
+            date: today(),
+            ...form,
+            title: form.title.trim(),
+            description: form.description.trim(),
+          });
+        } catch (err) {
+          setError(
+            err instanceof Error ? err.message : "Unable to save notice.",
+          );
+        } finally {
+          setBusy(false);
+        }
       }}
     >
       <div className="space-y-5">
@@ -90,8 +101,12 @@ export default function NoticeEditor({
           {error}
         </p>
       )}
-      <Button type="submit" className="w-full mt-6">
-        {form.published ? "Save & publish notice" : "Save draft notice"}
+      <Button type="submit" disabled={busy} className="w-full mt-6">
+        {busy
+          ? "Saving…"
+          : form.published
+            ? "Save & publish notice"
+            : "Save draft notice"}
       </Button>
     </form>
   );

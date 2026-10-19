@@ -33,11 +33,11 @@ export default function DashboardPage() {
       />
       {!user && (
         <p className="alert mb-6">
-          You are exploring the guest demo.{" "}
+          Sign in to access your saved bookings.{" "}
           <Link className="link" href="/login">
             Sign in
           </Link>{" "}
-          to try the sample profile.
+          to continue.
         </p>
       )}
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-7">
@@ -109,8 +109,8 @@ export default function DashboardPage() {
         ))}
       </div>
       <p className="text-xs text-muted mt-5">
-        This workspace includes sample bookings and bookings made in this
-        browser tab.
+        This dashboard shows demonstration bookings saved to your account.
+        Tickets are not valid for travel.
       </p>
     </>
   );

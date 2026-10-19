@@ -43,7 +43,7 @@ export default function Sidebar({ admin = false }: { admin?: boolean }) {
         <Icon name={admin ? "info" : "train"} />
         <p>
           {admin
-            ? "Demo workspace. Changes stay in this browser tab."
+            ? "Demonstration data saved securely to the project database."
             : "Your next journey starts here."}
         </p>
         <Link href={admin ? "/" : "/trains"}>

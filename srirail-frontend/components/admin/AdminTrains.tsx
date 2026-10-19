@@ -113,10 +113,10 @@ export default function AdminTrains() {
           <TrainEditor
             key={editing?.id ?? "new"}
             train={editing}
-            onSave={(t) => {
-              saveTrain(t);
+            onSave={async (t) => {
+              await saveTrain(t);
               setOpen(false);
-              setMessage(`${t.name} has been saved to the demo network.`);
+              setMessage(`${t.name} has been saved to the project network.`);
             }}
           />
         )}

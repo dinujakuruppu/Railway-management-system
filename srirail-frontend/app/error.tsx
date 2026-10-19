@@ -11,18 +11,17 @@ export default function ErrorPage({
     <div className="container page-section">
       <EmptyState
         title="Something interrupted your journey"
-        description="Please try again. If the demo session is damaged, reset it to restore the sample data."
+        description="Please try again, or return to the home page and reload your saved account data."
       >
         <div className="flex gap-3 justify-center flex-wrap">
           <Button onClick={reset}>Try again</Button>
           <Button
             variant="secondary"
             onClick={() => {
-              sessionStorage.removeItem("srirail-demo-v1");
               window.location.href = "/";
             }}
           >
-            Reset demo session
+            Return home
           </Button>
         </div>
       </EmptyState>

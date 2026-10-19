@@ -78,8 +78,9 @@ export default function PassengerForm() {
       }}
     >
       <div className="alert mb-5">
-        Use sample passenger information in this demo. Details are kept only in
-        this browser session.
+        Use fictional passenger information in this demo. Passenger details are
+        saved securely with your booking when you confirm the simulated payment.
+        Refreshing before confirmation clears this unfinished form.
       </div>
       <div className="space-y-5">
         {passengers.map((passenger, index) => (

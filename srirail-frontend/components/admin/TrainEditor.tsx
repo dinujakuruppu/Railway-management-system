@@ -13,7 +13,7 @@ export default function TrainEditor({
   onSave,
 }: {
   train: Train | null;
-  onSave: (train: Train) => void;
+  onSave: (train: Train) => Promise<void>;
 }) {
   const { trains } = useApp();
   const [form, setForm] = useState({
@@ -28,7 +28,8 @@ export default function TrainEditor({
     active: train?.active ?? true,
   });
   const [error, setError] = useState("");
-  function save(e: React.FormEvent) {
+  const [busy, setBusy] = useState(false);
+  async function save(e: React.FormEvent) {
     e.preventDefault();
     if (
       form.name.trim().length < 3 ||
@@ -83,25 +84,33 @@ export default function TrainEditor({
         };
       });
     }
-    onSave({
-      id: train?.id ?? `train-${crypto.randomUUID().slice(0, 8)}`,
-      trainNumber: form.number,
-      name: form.name.trim(),
-      type: form.type as Train["type"],
-      departureStation: form.from,
-      arrivalStation: form.to,
-      departureTime: form.departure,
-      arrivalTime: form.arrival,
-      duration: duration(form.departure, form.arrival),
-      stops,
-      classes: makeClasses(Number(form.base)),
-      facilities: train?.facilities ?? [
-        "On-board restrooms",
-        "Luggage racks",
-        "Reserved coaches",
-      ],
-      active: form.active,
-    });
+    setBusy(true);
+    setError("");
+    try {
+      await onSave({
+        id: train?.id ?? `train-${crypto.randomUUID().slice(0, 8)}`,
+        trainNumber: form.number,
+        name: form.name.trim(),
+        type: form.type as Train["type"],
+        departureStation: form.from,
+        arrivalStation: form.to,
+        departureTime: form.departure,
+        arrivalTime: form.arrival,
+        duration: duration(form.departure, form.arrival),
+        stops,
+        classes: makeClasses(Number(form.base)),
+        facilities: train?.facilities ?? [
+          "On-board restrooms",
+          "Luggage racks",
+          "Reserved coaches",
+        ],
+        active: form.active,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save train.");
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <form noValidate onSubmit={save}>
@@ -190,8 +199,8 @@ export default function TrainEditor({
           {error}
         </p>
       )}
-      <Button type="submit" className="w-full mt-4">
-        {train ? "Save train changes" : "Add train"}
+      <Button type="submit" disabled={busy} className="w-full mt-4">
+        {busy ? "Saving…" : train ? "Save train changes" : "Add train"}
       </Button>
     </form>
   );
